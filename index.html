@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Infinite Retro Sandbox - Maslok Mobile</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #4a69bd;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #version-tag {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 2px 2px 0px #000;
+            z-index: 10;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 1px 1px 1px black;
+            z-index: 5;
+        }
+
+        /* --- TELA DE SPLASH SCREEN (MASLOK) --- */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #4a69bd;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+            pointer-events: none; /* Não bloqueia toques */
+        }
+        .splash-container {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+        
+        .icon-maslok-img {
+            width: 85vw;
+            max-width: 600px;
+            height: auto;
+            object-fit: contain;
+            margin-bottom: 30px;
+            image-rendering: pixelated; 
+            image-rendering: crisp-edges;
+            filter: drop-shadow(0px 6px 12px rgba(0,0,0,0.3));
+        }
+
+        .loading-bar-border {
+            width: 220px;
+            height: 16px;
+            border: 3px solid #ffffff;
+            padding: 2px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+        .loading-bar-fill {
+            width: 0%;
+            height: 100%;
+            background-color: #7bed9f;
+            animation: loadProgress 2s forwards ease-in-out;
+        }
+        @keyframes loadProgress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        /* --- CONTROLES MOBILE UI --- */
+        #joystick-zone {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            z-index: 20;
+        }
+        #joystick-handle {
+            position: absolute;
+            top: 35px;
+            left: 35px;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        #jump-button {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 85px;
+            height: 85px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 35px;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="splash-screen">
+        <div class="splash-container">
+            <img class="icon-maslok-img" src="maslok.png" alt="Maslok Icon">
+            <div class="loading-bar-border">
+                <div class="loading-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="version-tag">vy-132211 (Mobile Fixed)</div>
+    <div id="crosshair">+</div>
+
+    <div id="joystick-zone">
+        <div id="joystick-handle"></div>
+    </div>
+    <div id="jump-button">▲</div>
+
+    <script>
+        let isSplashActive = true;
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const splash = document.getElementById('splash-screen');
+                if (splash) {
+                    splash.style.opacity = '0';
+                    setTimeout(() => {
+                        splash.remove();
+                        isSplashActive = false;
+                    }, 500);
+                }
+            }, 2000);
+        });
+
+        // --- CONFIGURAÇÃO THREE.JS ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x4a69bd);
+        scene.fog = new THREE.FogExp2(0x4a69bd, 0.05);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        dirLight.position.set(5, 15, 5);
+        scene.add(dirLight);
+
+        // --- TEXTURAS SIMPLES RETRO ---
+        function createPixelTexture(color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 16; canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, 16, 16);
+            ctx.fillStyle = 'rgba(0,0,0,0.08)';
+            ctx.fillRect(0, 15, 16, 1);
+            ctx.fillRect(15, 0, 1, 16);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            return texture;
+        }
+
+        const grassMat = new THREE.MeshLambertMaterial({ map: createPixelTexture('#2ed573') });
+        const stoneMat = new THREE.MeshLambertMaterial({ map: createPixelTexture('#747d8c') });
+        const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        const activeBlocks = new Map();
+        const CHUNK_SIZE = 10;
+
+        function updateInfiniteWorld() {
+            const playerX = Math.floor(camera.position.x);
+            const playerZ = Math.floor(camera.position.z);
+
+            for (let x = playerX - CHUNK_SIZE; x <= playerX + CHUNK_SIZE; x++) {
+                for (let z = playerZ - CHUNK_SIZE; z <= playerZ + CHUNK_SIZE; z++) {
+                    const k1 = `${x},0,${z}`;
+                    if (!activeBlocks.has(k1)) {
+                        const b = new THREE.Mesh(blockGeo, grassMat);
+                        b.position.set(x + 0.5, -0.5, z + 0.5);
+                        scene.add(b); activeBlocks.set(k1, b);
+                    }
+                    const k2 = `${x},-1,${z}`;
+                    if (!activeBlocks.has(k2)) {
+                        const b = new THREE.Mesh(blockGeo, stoneMat);
+                        b.position.set(x + 0.5, -1.5, z + 0.5);
+                        scene.add(b); activeBlocks.set(k2, b);
+                    }
+                }
+            }
+        }
+
+        // --- PROPRIEDADES DO JOGADOR ---
+        camera.position.set(0, 1.5, 0);
+        let yaw = 0, pitch = 0;
+        let velocityY = 0;
+        let isGrounded = true;
+
+        function checkCollision(pos) {
+            for (const b of activeBlocks.values()) {
+                if (Math.abs(pos.x - b.position.x) < 0.8 &&
+                    Math.abs(pos.z - b.position.z) < 0.8 &&
+                    pos.y - 1.5 < b.position.y + 0.5 && pos.y > b.position.y - 0.5) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // --- SISTEMA DE ENTRADA TOUCH ADAPTATIVO ---
+        let moveInput = { x: 0, y: 0 };
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickHandle = document.getElementById('joystick-handle');
+        const jumpButton = document.getElementById('jump-button');
+
+        let lookTouch = null;
+        let joystickCenter = { x: 0, y: 0 };
+
+        // Evento Direto do Botão de Pulo
+        jumpButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            velocityY = 5.5; // Força o valor de impulso vertical para cima
+            isGrounded = false;
+        }, { passive: false });
+
+        window.addEventListener('touchstart', (e) => {
+            if (isSplashActive) return;
+
+            for (let t of e.changedTouches) {
+                if (t.target === jumpButton) continue;
+
+                // Lado Esquerdo: Joystick
+                if (t.clientX < window.innerWidth / 2) {
+                    const rect = joystickZone.getBoundingClientRect();
+                    joystickCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+                    processJoystick(t.clientX, t.clientY);
+                } 
+                // Lado Direito: Câmera
+                else {
+                    lookTouch = { id: t.identifier, x: t.clientX, y: t.clientY };
+                }
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isSplashActive) return;
+
+            for (let t of e.touches) {
+                if (t.clientX < window.innerWidth / 2) {
+                    processJoystick(t.clientX, t.clientY);
+                } else if (lookTouch && t.identifier === lookTouch.id) {
+                    const dx = t.clientX - lookTouch.x;
+                    const dy = t.clientY - lookTouch.y;
+
+                    yaw -= dx * 0.007;
+                    pitch -= dy * 0.007;
+                    pitch = Math.max(-1.4, Math.min(1.4, pitch));
+
+                    camera.rotation.order = "YXZ";
+                    camera.rotation.set(pitch, yaw, 0);
+
+                    lookTouch.x = t.clientX;
+                    lookTouch.y = t.clientY;
+                }
+            }
+        });
+
+        window.addEventListener('touchend', (e) => {
+            for (let t of e.changedTouches) {
+                if (t.clientX < window.innerWidth / 2) {
+                    joystickHandle.style.transform = 'translate(0px, 0px)';
+                    moveInput = { x: 0, y: 0 };
+                } else if (lookTouch && t.identifier === lookTouch.id) {
+                    lookTouch = null;
+                }
+            }
+        });
+
+        function processJoystick(clientX, clientY) {
+            const dx = clientX - joystickCenter.x;
+            const dy = clientY - joystickCenter.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const maxDist = 40;
+
+            const angle = Math.atan2(dy, dx);
+            const moveDist = Math.min(dist, maxDist);
+
+            joystickHandle.style.transform = `translate(${Math.cos(angle)*moveDist}px, ${Math.sin(angle)*moveDist}px)`;
+
+            moveInput.x = Math.cos(angle) * (moveDist / maxDist);
+            moveInput.y = -Math.sin(angle) * (moveDist / maxDist);
+        }
+
+        // --- GAME LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            updateInfiniteWorld();
+
+            // Direções de movimento baseadas na câmera
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            forward.y = 0; forward.normalize();
+            right.y = 0; right.normalize();
+
+            let moveStep = new THREE.Vector3();
+            if (moveInput.y !== 0) moveStep.addScaledVector(forward, moveInput.y * 4.5 * delta);
+            if (moveInput.x !== 0) moveStep.addScaledVector(right, moveInput.x * 4.5 * delta);
+
+            // Gravidade e Física Vertical
+            velocityY -= 14.0 * delta;
+            moveStep.y += velocityY * delta;
+
+            // Executar movimento com checagem de colisão simples
+            const nextPos = camera.position.clone().add(moveStep);
+            
+            if (!checkCollision(new THREE.Vector3(nextPos.x, camera.position.y, camera.position.z))) {
+                camera.position.x = nextPos.x;
+            }
+            if (!checkCollision(new THREE.Vector3(camera.position.x, camera.position.y, nextPos.z))) {
+                camera.position.z = nextPos.z;
+            }
+            
+            // Tratamento do Eixo Y (Chão / Queda)
+            const testY = new THREE.Vector3(camera.position.x, nextPos.y, camera.position.z);
+            if (!checkCollision(testY)) {
+                camera.position.y = nextPos.y;
+                isGrounded = false;
+            } else {
+                if (velocityY < 0) {
+                    velocityY = 0;
+                    isGrounded = true;
+                } else {
+                    velocityY = -0.1;
+                }
+            }
+
+            // Sistema de segurança anti-queda infinita
+            if (camera.position.y < -10) {
+                camera.position.set(0, 1.5, 0);
+                velocityY = 0;
+                isGrounded = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        updateInfiniteWorld();
+        animate();
+    </script>
+</body>
+</html>
+
